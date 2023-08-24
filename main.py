@@ -6,20 +6,21 @@ from transformers import GPT2Config, GPT2LMHeadModel
 from mido import MidiFile, MidiTrack, Message
 from tqdm import tqdm
 
+
 # Parameters
 note_vocab_size = 128
 relative_onset_vocab_size = 100
 duration_vocab_size = 100
-vocab_size = note_vocab_size * relative_onset_vocab_size * duration_vocab_size
-sequence_length = 100
-embedding_size = 128
+vocab_size = note_vocab_size + relative_onset_vocab_size + duration_vocab_size
+sequence_length = 300
+embedding_size = 256
 num_heads = 16
 num_layers = 4
 num_epochs = 100
 batch_size = 64
 lr = 0.001
 
-folder_path = "C:\\Users\\Marko Pap\\Downloads\\MIDI dataset"
+folder_path = "dataset"
 file_names = [f for f in os.listdir(folder_path) if f.endswith(".mid")]
 midi_data = []
 
@@ -27,28 +28,29 @@ for file_name in file_names:
     midi_path = os.path.join(folder_path, file_name)
     midi = MidiFile(midi_path)
 
-    events = []
+    pitches, onsets, durations = [], [], []
     for track in midi.tracks:
         current_time = 0
-        note_on_time = {}  
+        note_on_time = {}
         for msg in track:
             current_time += msg.time
             if msg.type == "note_on" and msg.velocity > 0:
-                note = msg.note
-                relative_onset = min(current_time, relative_onset_vocab_size - 1)
-                note_on_time[note] = current_time
-                current_time = 0
+                note_on_time[msg.note] = current_time
             elif (msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0)) and msg.note in note_on_time:
                 note = msg.note
-                duration = min(current_time - note_on_time[note], duration_vocab_size - 1)
-                events.append(note + relative_onset * note_vocab_size + duration * note_vocab_size * relative_onset_vocab_size)
-                del note_on_time[note]
+                relative_onset = min(current_time - note_on_time[msg.note], relative_onset_vocab_size - 1)
+                duration = min(current_time, duration_vocab_size - 1)
+                pitches.append(note)
+                onsets.append(note_vocab_size + relative_onset)
+                durations.append(note_vocab_size + relative_onset_vocab_size + duration)
+                del note_on_time[msg.note]
 
+    events = pitches + onsets + durations
     midi_data.extend(events[:sequence_length * (len(events) // sequence_length)])
 
 midi_data = torch.tensor(midi_data).view(-1, sequence_length)
 dataset = TensorDataset(midi_data)
-data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 config = GPT2Config(
     vocab_size=vocab_size,
@@ -59,7 +61,6 @@ config = GPT2Config(
 )
 
 model = GPT2LMHeadModel(config)
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 model.train()
@@ -87,27 +88,29 @@ for epoch in range(num_epochs):
     print(f"Training Loss: {avg_loss:.4f}")
 
 model.eval()
-generated = [torch.randint(0, vocab_size, (1,))]
+generated = [torch.randint(0, vocab_size, (1,)).item()]
+
+
 temperature = 0.7
 
-for i in range(sequence_length - 1):
-    inputs = torch.tensor(generated, dtype=torch.long).to(device)
+for i in range(sequence_length):  # Adjusted for 3 tokens
+    inputs = torch.tensor(generated[-3:], dtype=torch.long).unsqueeze(0).to(device)  # Last 3 tokens
     outputs = model(inputs).logits
     probs = F.softmax(outputs / temperature, dim=-1)
-    next_token = torch.multinomial(probs[-1], 1)
+    next_token = torch.multinomial(probs[-1], 1)[0].item()
     generated.append(next_token)
 
 midi = MidiFile()
 track = MidiTrack()
 midi.tracks.append(track)
 
-for token in generated:
-    if isinstance(token, torch.Tensor):
-        token = token.item()
-        note = token % note_vocab_size
-        relative_onset = (token // note_vocab_size) % relative_onset_vocab_size
-        duration = token // (note_vocab_size * relative_onset_vocab_size)
-        track.append(Message("note_on", note=note, velocity=64, time=relative_onset))
-        track.append(Message("note_off", note=note, velocity=64, time=duration))
+for i in range(0, len(generated)-3):
+    note = generated[i]
+    relative_onset = generated[i+1]
+    duration = generated[i+2]
+
+    note = max(0, min(127, note))
+    track.append(Message("note_on", note=note, velocity=64, time=relative_onset))
+    track.append(Message("note_off", note=note, velocity=64, time=duration))
 
 midi.save("generated_midi.mid")
