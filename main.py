@@ -30,7 +30,7 @@ for file_name in file_names:
     midi_path = os.path.join(folder_path, file_name)
     midi = MidiFile(midi_path)
 
-    pitches, onsets, durations = [], [], []
+    events = []
     for track in midi.tracks:
         current_time = 0
         note_on_time = {}
@@ -42,13 +42,15 @@ for file_name in file_names:
                 note = msg.note
                 relative_onset = min(current_time - note_on_time[msg.note], relative_onset_vocab_size - 1)
                 duration = min(current_time, duration_vocab_size - 1)
-                pitches.append(note)
-                onsets.append(note_vocab_size + relative_onset)
-                durations.append(note_vocab_size + relative_onset_vocab_size + duration)
+                
+                events.append(note)
+                events.append(note_vocab_size + relative_onset)
+                events.append(note_vocab_size + relative_onset_vocab_size + duration)
+                
                 del note_on_time[msg.note]
 
-    events = pitches + onsets + durations
     midi_data.extend(events[:sequence_length * (len(events) // sequence_length)])
+
 
 save_directory = "gpt2_midi_model"
 if os.path.exists(save_directory):
@@ -98,10 +100,10 @@ if training:
     model.save_pretrained(save_directory)
 
 generated = [torch.randint(0, vocab_size, (1,)).item()]
-temperature = 0.7
+temperature = 0.2
 
-for i in range(sequence_length):  # Adjusted for 3 tokens
-    inputs = torch.tensor(generated[-3:], dtype=torch.long).unsqueeze(0).to(device)  # Last 3 tokens
+for i in range(sequence_length):
+    inputs = torch.tensor(generated[-3:], dtype=torch.long).unsqueeze(0).to(device)
     outputs = model(inputs).logits
     probs = F.softmax(outputs / temperature, dim=-1)
     next_token = torch.multinomial(probs[-1], 1)[0].item()
@@ -111,12 +113,13 @@ midi = MidiFile()
 track = MidiTrack()
 midi.tracks.append(track)
 
-for i in range(0, len(generated)-3):
+for i in range(0, len(generated)-2, 3):  
     note = generated[i]
-    relative_onset = generated[i+1]
-    duration = generated[i+2]
+    relative_onset = generated[i+1] - note_vocab_size
+    duration = generated[i+2] - (note_vocab_size + relative_onset_vocab_size)
 
     note = max(0, min(127, note))
+    
     track.append(Message("note_on", note=note, velocity=64, time=relative_onset))
     track.append(Message("note_off", note=note, velocity=64, time=duration))
 
