@@ -15,12 +15,14 @@ vocab_size = note_vocab_size + relative_onset_vocab_size + duration_vocab_size
 sequence_length = 300
 embedding_size = 256
 num_heads = 16
-num_layers = 4
+num_layers = 8
 num_epochs = 100
 batch_size = 64
 lr = 0.001
 
-folder_path = "dataset"
+folder_path = "MIDI dataset"
+training = True
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 file_names = [f for f in os.listdir(folder_path) if f.endswith(".mid")]
 midi_data = []
 
@@ -48,49 +50,54 @@ for file_name in file_names:
     events = pitches + onsets + durations
     midi_data.extend(events[:sequence_length * (len(events) // sequence_length)])
 
-midi_data = torch.tensor(midi_data).view(-1, sequence_length)
-dataset = TensorDataset(midi_data)
-data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+save_directory = "gpt2_midi_model"
+if os.path.exists(save_directory):
+    model = GPT2LMHeadModel.from_pretrained(save_directory).to(device)
+    training = False
 
-config = GPT2Config(
-    vocab_size=vocab_size,
-    n_positions=sequence_length,
-    n_embd=embedding_size,
-    n_layer=num_layers,
-    n_head=num_heads,
-)
+if training:
+    midi_data = torch.tensor(midi_data).view(-1, sequence_length)
+    dataset = TensorDataset(midi_data)
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-model = GPT2LMHeadModel(config)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-model.train()
+    config = GPT2Config(
+        vocab_size=vocab_size,
+        n_positions=sequence_length,
+        n_embd=embedding_size,
+        n_layer=num_layers,
+        n_head=num_heads,
+    )
 
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    model = GPT2LMHeadModel(config)
+    model.to(device)
+    model.train()
 
-for epoch in range(num_epochs):
-    print(f"Epoch {epoch + 1}/{num_epochs}")
-    total_loss = 0
-    total_batches = len(data_loader)
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    for batch in tqdm(data_loader):
-        inputs = batch[0][:, :-1].to(device)
-        targets = batch[0][:, 1:].to(device)
-        outputs = model(inputs).logits
-        loss = criterion(outputs.reshape(-1, vocab_size), targets.reshape(-1))
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    for epoch in range(num_epochs):
+        print(f"Epoch {epoch + 1}/{num_epochs}")
+        total_loss = 0
+        total_batches = len(data_loader)
 
-        total_loss += loss.item()
+        for batch in tqdm(data_loader):
+            inputs = batch[0][:, :-1].to(device)
+            targets = batch[0][:, 1:].to(device)
+            outputs = model(inputs).logits
+            loss = criterion(outputs.reshape(-1, vocab_size), targets.reshape(-1))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-    avg_loss = total_loss / total_batches
-    print(f"Training Loss: {avg_loss:.4f}")
+            total_loss += loss.item()
 
-model.eval()
+        avg_loss = total_loss / total_batches
+        print(f"Training Loss: {avg_loss:.4f}")
+
+    model.eval()
+    model.save_pretrained(save_directory)
+
 generated = [torch.randint(0, vocab_size, (1,)).item()]
-
-
 temperature = 0.7
 
 for i in range(sequence_length):  # Adjusted for 3 tokens
