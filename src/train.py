@@ -109,7 +109,7 @@ def main():
             best_loss = avg_valid_loss
             if not os.path.exists(args.save_directory):
                 os.mkdir(args.save_directory)
-            torch.save(model.state_dict(), os.path.join(args.save_directory))
+            model.save_pretrained(args.save_directory)
             early_stopping_counter = 0
         else:
             early_stopping_counter += 1
