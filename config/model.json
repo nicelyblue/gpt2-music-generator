@@ -1,0 +1,9 @@
+{
+    "sequence_length": 20,
+    "embedding_size": 4,
+    "num_heads": 1,
+    "num_layers": 1,
+    "resid_pdrop": 0.2,
+    "embd_pdrop": 0.2
+  }
+  

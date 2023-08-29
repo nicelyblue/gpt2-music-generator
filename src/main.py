@@ -63,7 +63,7 @@ tokens = tokens[:trimmed_length]
 
 vocab_size = len(vocab)
 
-save_directory = "gpt2_midi_model"
+save_directory = "model"
 if os.path.exists(save_directory):
     model = GPT2LMHeadModel.from_pretrained(save_directory).to(device)
     training = False
@@ -149,7 +149,7 @@ if training:
             best_loss = avg_valid_loss
             if not os.path.exists(save_directory):
                 os.mkdir(save_directory)
-            torch.save(model.state_dict(), os.path.join(save_directory, "best_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_directory))
             early_stopping_counter = 0
         else:
             early_stopping_counter += 1
@@ -163,14 +163,14 @@ if training:
     model.eval()
 
 # Load the best model for generation
-model.load_state_dict(torch.load(os.path.join(save_directory, "best_model.pth")))
+model.load_state_dict(torch.load(save_directory))
 model.eval()
 
 generated = [torch.randint(0, vocab_size, (1,)).item()]
 temperature = 0.9
 
 for i in range(sequence_length):
-    inputs = torch.tensor(generated[-3:], dtype=torch.long).unsqueeze(0).to(device)
+    inputs = torch.tensor(generated, dtype=torch.long).unsqueeze(0).to(device)
     outputs = model(inputs).logits
     probs = F.softmax(outputs / temperature, dim=-1)
     next_token = torch.multinomial(probs[-1], 1)[0].item()
