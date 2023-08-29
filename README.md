@@ -22,35 +22,35 @@ This project aims to generate music using Transformer models. The model is train
 
 Run the following to install the required packages:
 
-\`\`\`
+```
 pip install -r requirements.txt
-\`\`\`
+```
 
 ## Quick Start
 
 1. Clone this repository:
 
-\`\`\`
+```
 git clone https://github.com/nicelyblue/gpt2-music-generator
-\`\`\`
+```
 
 2. Navigate to the directory:
 
-\`\`\`
+```
 cd gpt2-music-generator
-\`\`\`
+```
 
 3. Install the required Python packages:
 
-\`\`\`
+```
 pip install -r requirements.txt
-\`\`\`
+```
 
 4. Train the model:
 
-\`\`\`
+```
 python train.py model.json
-\`\`\`
+```
 
 Optional arguments:
 
@@ -62,9 +62,9 @@ Optional arguments:
 
 5. Generate music:
 
-\`\`\`
+```
 python generate.py model
-\`\`\`
+```
 
 Optional arguments:
 
@@ -73,9 +73,9 @@ Optional arguments:
 
 6. Convert MIDI to WAV:
 
-\`\`\`
+```
 python synth.py <input-midi-file>
-\`\`\`
+```
 
 Optional arguments:
 
@@ -83,9 +83,9 @@ Optional arguments:
 
 7. View MIDI file details:
 
-\`\`\`
+```
 python view.py <path-to-midi-file>
-\`\`\`
+```
 
 ## Code Structure
 
@@ -100,7 +100,7 @@ python view.py <path-to-midi-file>
 
 Example model.json:
 
-\`\`\`json
+```json
 {
     "sequence_length": 20,
     "embedding_size": 4,
@@ -109,7 +109,7 @@ Example model.json:
     "resid_pdrop": 0.2,
     "embd_pdrop": 0.2
 }
-\`\`\`
+```
 
 ## Contributing
 
